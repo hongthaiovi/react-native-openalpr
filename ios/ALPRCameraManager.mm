@@ -15,6 +15,7 @@
 #import <React/UIView+React.h>
 #import <AVFoundation/AVFoundation.h>
 #import "PlateScanner.h"
+#import <opencv2/imgcodecs/ios.h>
 
 
 #pragma mark OpenCV -
@@ -214,6 +215,36 @@ RCT_EXPORT_METHOD(takePicture:(NSDictionary *)options
     
     AVCapturePhotoSettings *settings = [AVCapturePhotoSettings photoSettings];
     [self.avCaptureOutput capturePhotoWithSettings:settings delegate:self];
+}
+
+RCT_EXPORT_METHOD(scanCarPlate:(NSString *)plate  callback:(RCTResponseSenderBlock) callback)
+{
+  UIImage* resImage = [self decodeBase64ToImage: plate];
+  cv::Mat cvImage;
+  UIImageToMat(resImage, cvImage, true);
+  [[PlateScanner sharedInstance] setCountry: @"us"];
+  [[PlateScanner sharedInstance] scanImage:cvImage onSuccess:^(PlateResult *result) {
+    if (result) {
+      callback(@[[NSNull null],
+                 @{
+                   @"confidence": @(result.confidence),
+                   @"plate": result.plate
+                 }
+               ]);
+    }else{
+        callback(@[[NSString stringWithFormat:@"%d", 0], [NSNull null]]);
+    }
+  } onFailure:^(NSError *err) {
+    callback(@[[NSString stringWithFormat:@"%d", 0], [NSNull null]]);
+  }];
+}
+
+- (UIImage *)decodeBase64ToImage:(NSString *)strEncodeData {
+  NSData *data = [[NSData alloc]initWithBase64EncodedString:strEncodeData options:NSDataBase64DecodingIgnoreUnknownCharacters];
+  return [UIImage imageWithData:data];
+}
+- (NSString *)encodeToBase64String:(UIImage *)image {
+ return [UIImagePNGRepresentation(image) base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
 }
 
 - (void)captureOutput:(AVCapturePhotoOutput *)output didFinishProcessingPhoto:(AVCapturePhoto *)photo error:(nullable NSError *)error
@@ -448,7 +479,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     self.camera = nil;
     return;
 #endif
-    // Make sure that we are on the main thread when we are 
+    // Make sure that we are on the main thread when we are
     // ending the session, otherwise we may get an exception:
     // Fatal Exception: NSGenericException
     // *** Collection <CALayerArray: 0x282781230> was mutated while being enumerated.
