@@ -238,12 +238,11 @@ RCT_EXPORT_METHOD(scanCarPlate:(NSString *)plate  callback:(RCTResponseSenderBlo
   cv::Mat cvImage;
   UIImageToMat(resImage, cvImage, false);
   [[PlateScanner sharedInstance] setCountry: @"sg"];
-  [[PlateScanner sharedInstance] scanImage:cvImage onSuccess:^(PlateResult *result) {
+  [[PlateScanner sharedInstance] scanImage:cvImage onSuccess:^(NSArray *result) {
     if (result) {
       callback(@[[NSNull null],
                  @{
-                   @"confidence": @(result.confidence),
-                   @"plate": result.plate
+                     @"data" : [self indexKeyedDictionaryFromArray: result]
                  }
                ]);
     } else {
