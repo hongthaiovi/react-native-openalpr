@@ -25,5 +25,5 @@
 
 - (id)initWithManager:(ALPRCameraManager*)manager bridge:(RCTBridge *)bridge;
 
-- (void) updatePlateBorder:(PlateResult *)result orientation:(UIDeviceOrientation)orientation;
+- (void) updatePlateBorder:(NSArray *)results orientation:(UIDeviceOrientation)orientation;
 @end

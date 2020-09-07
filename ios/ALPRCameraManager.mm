@@ -75,6 +75,21 @@ RCT_EXPORT_MODULE(ALPRCameraManager);
     return self.camera;
 }
 
+
+
+- (NSDictionary *) indexKeyedDictionaryFromArray:(NSArray *)array
+{
+    PlateResult *objectInstance;
+    NSUInteger indexKey = 0U;
+    NSMutableDictionary *mutableDictionary = [[NSMutableDictionary alloc] init];
+    for (objectInstance in array)
+        [mutableDictionary setObject:@{
+            @"plate": objectInstance.plate,
+            @"confidence":[NSNumber numberWithInt: objectInstance.confidence]
+        } forKey:[NSNumber numberWithUnsignedInt:indexKey++]];
+    return mutableDictionary;
+}
+
 - (NSDictionary *)constantsToExport
 {
     return @{
@@ -217,50 +232,6 @@ RCT_EXPORT_METHOD(takePicture:(NSDictionary *)options
     [self.avCaptureOutput capturePhotoWithSettings:settings delegate:self];
 }
 
-RCT_EXPORT_METHOD(scanCarPlate:(NSString *)plate  callback:(RCTResponseSenderBlock) callback)
-{
-  UIImage* resImage = [self decodeBase64ToImage: plate];
-  cv::Mat cvImage;
-  UIImageToMat(resImage, cvImage, false);
-  [[PlateScanner sharedInstance] setCountry: @"sg"];
-  [[PlateScanner sharedInstance] scanImage:cvImage onSuccess:^(PlateResult *result) {
-    if (result) {
-      callback(@[[NSNull null],
-                 @{
-                   @"confidence": @(result.confidence),
-                   @"plate": result.plate
-                 }
-               ]);
-    } else {
-        callback(@[[NSString stringWithFormat:@"%d", 0], [NSNull null]]);
-    }
-  } onFailure:^(NSError *err) {
-    callback(@[[NSString stringWithFormat:@"%d", 0], [NSNull null]]);
-  }];
-}
-
-- (UIImage *)decodeBase64ToImage:(NSString *)strEncodeData {
-  NSData *data = [[NSData alloc]initWithBase64EncodedString:strEncodeData options:NSDataBase64DecodingIgnoreUnknownCharacters];
-//    UIImage *image = [UIImage imageWithData:data];
-    return [UIImage imageWithData:data];// [self imageWithCIFilter:@"CIPhotoEffectMono" image: image];
-}
-- (NSString *)encodeToBase64String:(UIImage *)image {
- return [UIImagePNGRepresentation(image) base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
-}
-
-- (UIImage *)imageWithCIFilter:(NSString*)filterName image: (UIImage*) image{
-    CIImage *unfiltered = [CIImage imageWithCGImage:image.CGImage];
-    CIFilter *filter = [CIFilter filterWithName:filterName];
-    [filter setValue:unfiltered forKey:kCIInputImageKey];
-    CIImage *filtered = [filter outputImage];
-    CIContext *context = [CIContext contextWithOptions:nil];
-    CGImageRef cgimage = [context createCGImage:filtered fromRect:CGRectMake(0, 0, image.size.width*image.scale, image.size.height*image.scale)];
-    // Do not use initWithCIImage because that renders the filter each time the image is displayed.  This causes slow scrolling in tableviews.
-    UIImage *img = [[UIImage alloc] initWithCGImage:cgimage scale:image.scale orientation:image.imageOrientation];
-    CGImageRelease(cgimage);
-    return img;
-}
-
 - (void)captureOutput:(AVCapturePhotoOutput *)output didFinishProcessingPhoto:(AVCapturePhoto *)photo error:(nullable NSError *)error
 {
     if (!error) {
@@ -375,18 +346,16 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         }
         rot90(src, rotate);
         
-//        NSDate *date = [NSDate date];
+        //        NSDate *date = [NSDate date];
         
-        [[PlateScanner sharedInstance] scanImage:src onSuccess:^(PlateResult *result) {
+        [[PlateScanner sharedInstance] scanImage:src onSuccess:^(NSArray *result) {
             if (result && self.camera.onPlateRecognized) {
                 self.camera.onPlateRecognized(@{
-                    @"confidence": @(result.confidence),
-                    @"plate": result.plate
-                });
+                    @"data" : [self indexKeyedDictionaryFromArray: result]});
             }
             
             CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
-//            NSLog(@"Time: %f", -[date timeIntervalSinceNow]);
+            //            NSLog(@"Time: %f", -[date timeIntervalSinceNow]);
             self.isProcessingFrame = NO;
             
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -394,7 +363,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             });
             
         } onFailure:^(NSError *err) {
-//            NSLog(@"Error: %@", err);
+            //            NSLog(@"Error: %@", err);
             CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
             self.isProcessingFrame = NO;
         }];
@@ -505,11 +474,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     for(AVCaptureInput *input in self.session.inputs) {
         [self.session removeInput:input];
     }
-        
+    
     for(AVCaptureOutput *output in self.session.outputs) {
         [self.session removeOutput:output];
     }
-        
+    
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     if ([[UIDevice currentDevice] isGeneratingDeviceOrientationNotifications]) {
         [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];

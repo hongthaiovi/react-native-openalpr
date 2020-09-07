@@ -22,7 +22,7 @@
 @property (nonatomic, weak) ALPRCameraManager *manager;
 @property (nonatomic, weak) RCTBridge *bridge;
 @property (nonatomic, strong) CameraTouchFocusView *camFocus;
-@property (nonatomic, strong) RecognizedPlateBorderView *plateBorder;
+@property (nonatomic, strong) UIView *detectReview;
 
 @end
 
@@ -36,7 +36,6 @@
 
 - (void) setPlateOutlineColor:(NSString *)color {
     _plateOutlineColor = color;
-    self.plateBorder.colorString = color;
 }
 
 - (void)setTouchToFocus:(BOOL)enabled {
@@ -57,65 +56,59 @@
         [self addGestureRecognizer:pinchGesture];
         [self.manager initializeCaptureSessionInput:AVMediaTypeVideo];
         [self.manager startSession];
-        self.plateBorder = [RecognizedPlateBorderView new];
         _multipleTouches = NO;
         _touchToFocus = YES;
         _showPlateOutline = YES;
     }
     return self;
 }
-
-- (void)updatePlateBorder:(PlateResult *)result orientation:(UIDeviceOrientation)orientation {
+//PlateResult
+- (void)updatePlateBorder:(NSArray *)results orientation:(UIDeviceOrientation)orientation {
     if (!_showPlateOutline) return;
+    [self.detectReview.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     if (!UIDeviceOrientationIsValidInterfaceOrientation(orientation)) return;
-    if (!result) {
-        [UIView animateWithDuration:0.2f animations:^{
-            self.plateBorder.alpha = 0;
-        }];
-        return;
-    }
-    NSArray *points = result.points;
-    NSMutableArray *newPoints = [NSMutableArray array];
-    for (int i = 0; i < points.count; i++) {
-        CGPoint pt = [[points objectAtIndex:i] CGPointValue];
-        CGPoint newPt;
-        
-        // To undertand what is happening here, draw a rectangle representing the screen.
-        // Make a small circle where the home button is located and mark any point (x,y).
-        // The x-axis is cols, the y-axis is rows. Now, rotate the picture so that the home
-        // button is on the right side. We want to transform our (x,y) into a new coordinate
-        // system where the top-left is (0,0) and bottom right is (1,1)
-        switch (orientation) {
-            case UIDeviceOrientationPortrait:
-                newPt = CGPointMake(pt.y / result.rows, (result.cols - pt.x) / result.cols);
-                break;
-            case UIDeviceOrientationLandscapeLeft:
-                newPt = CGPointMake(pt.x / result.cols, pt.y / result.rows);
-                break;
-            case UIDeviceOrientationLandscapeRight:
-                newPt = CGPointMake((result.cols - pt.x) / result.cols, (result.rows - pt.y) / result.rows);
-                break;
-            default:
-                break;
+    for (int j = 0; j < results.count; j++) {
+        PlateResult *result = results[j];
+        NSArray *points = result.points;
+        NSMutableArray *newPoints = [NSMutableArray array];
+        for (int i = 0; i < points.count; i++) {
+            CGPoint pt = [[points objectAtIndex:i] CGPointValue];
+            CGPoint newPt;
+            switch (orientation) {
+                case UIDeviceOrientationPortrait:
+                    newPt = CGPointMake(pt.y / result.rows, (result.cols - pt.x) / result.cols);
+                    break;
+                case UIDeviceOrientationLandscapeLeft:
+                    newPt = CGPointMake(pt.x / result.cols, pt.y / result.rows);
+                    break;
+                case UIDeviceOrientationLandscapeRight:
+                    newPt = CGPointMake((result.cols - pt.x) / result.cols, (result.rows - pt.y) / result.rows);
+                    break;
+                default:
+                    break;
+            }
+            [newPoints addObject:[NSValue valueWithCGPoint:[self.manager.previewLayer pointForCaptureDevicePointOfInterest:newPt]]];
         }
-        [newPoints addObject:[NSValue valueWithCGPoint:[self.manager.previewLayer pointForCaptureDevicePointOfInterest:newPt]]];
+        RecognizedPlateBorderView *plateBorder = [RecognizedPlateBorderView new];
+        plateBorder.colorString = self->_plateOutlineColor;
+        plateBorder.alpha = 1;
+        plateBorder.frame = self.bounds;
+        [plateBorder updateCorners:newPoints];
+        [self.detectReview addSubview:plateBorder];
     }
-    [UIView animateWithDuration:0.2f animations:^{
-        self.plateBorder.alpha = 1;
-        [self.plateBorder updateCorners:newPoints];
-    }];
 }
 
 - (void)layoutSubviews
 {
     [super layoutSubviews];
+    self.detectReview = [UIView new];
     self.manager.previewLayer.frame = self.bounds;
-    self.plateBorder.frame = self.bounds;
+    self.detectReview.frame = self.bounds;
+    [self.detectReview setBackgroundColor: [UIColor clearColor]];
     [self setBackgroundColor:[UIColor blackColor]];
     [self.layer insertSublayer:self.manager.previewLayer atIndex:0];
-    if (_showPlateOutline) {
-        [self addSubview:self.plateBorder];
-    }
+    [self addSubview:self.detectReview];
+    
 }
 
 - (void)insertReactSubview:(UIView *)view atIndex:(NSInteger)atIndex
@@ -163,7 +156,7 @@
         {
             [self.camFocus removeFromSuperview];
         }
-
+        
         // Show animated rectangle on the touched area
         if (_touchToFocus) {
             self.camFocus = [[CameraTouchFocusView alloc]initWithFrame:CGRectMake(touchPoint.x-40, touchPoint.y-40, 80, 80)];
@@ -185,7 +178,7 @@
 }
 
 -(void) handlePinchToZoomRecognizer:(UIPinchGestureRecognizer*)pinchRecognizer {
-
+    
     if (pinchRecognizer.state == UIGestureRecognizerStateChanged) {
         return;
     }

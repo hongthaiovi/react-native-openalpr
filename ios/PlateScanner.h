@@ -16,7 +16,7 @@ using namespace cv;
 
 @interface PlateScanner : NSObject
 
-typedef void(^onPlateScanSuccess)(PlateResult *);
+typedef void(^onPlateScanSuccess)(NSArray *);
 typedef void(^onPlateScanFailure)(NSError *);
 
 + (instancetype)sharedInstance;

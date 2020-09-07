@@ -54,5 +54,5 @@ typedef NS_ENUM(NSInteger, ALPRCameraTorchMode) {
 - (void)startSession;
 - (void)stopSession;
 - (void)focusAtThePoint:(CGPoint) atPoint;
-
+- (NSDictionary *) indexKeyedDictionaryFromArray:(NSArray *)array;
 @end
